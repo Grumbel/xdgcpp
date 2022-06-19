@@ -7,14 +7,14 @@ set(XDG_BUILD_TESTS OFF CACHE BOOL "Toggles building of the xdg test suite")
 
 set(XDGCPP_VERSION ${PROJECT_VERSION})
 
-add_library(xdgcpp STATIC xdg.cpp)
+add_library(xdgcpp STATIC src/xdg.cpp)
 set_property(TARGET xdgcpp PROPERTY CXX_STANDARD 17)
 set_target_properties(xdgcpp PROPERTIES PUBLIC_HEADER "include/xdg.h")
 target_include_directories(xdgcpp PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include/xdgcpp>
   )
-add_executable(xdgcpp-info xdg_info.cpp)
+add_executable(xdgcpp-info src/xdg_info.cpp)
 set_property(TARGET xdgcpp-info PROPERTY CXX_STANDARD 17)
 target_link_libraries(xdgcpp-info xdgcpp)
 
@@ -23,7 +23,7 @@ if(XDG_BUILD_TESTS)
 
   enable_testing()
   add_definitions(-DBOOST_TEST_DYN_LINK -DBOOST_TEST_MAIN -DBOOST_TEST_MODULE=xdgcpp)
-  add_executable(xdgcpp_test xdg_test.cpp)
+  add_executable(xdgcpp_test src/xdg_test.cpp)
   set_property(TARGET xdgcpp_test PROPERTY CXX_STANDARD 17)
   target_link_libraries(xdgcpp_test xdgcpp)
   target_link_libraries(xdgcpp_test ${Boost_LIBRARIES})
