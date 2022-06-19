@@ -35,6 +35,9 @@ int main()
         std::cout << "  " << dir << std::endl;
     std::cout << std::endl;
 
+    std::cout << "xdg::state().home():\n  " << xdg::state().home() << std::endl;
+    std::cout << std::endl;
+
     std::cout << "xdg::cache().home():\n  " << xdg::cache().home() << std::endl;
     std::cout << std::endl;
 

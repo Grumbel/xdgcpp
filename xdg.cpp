@@ -1,4 +1,5 @@
 // Copyright (C) 2015 Thomas Voß <thomas.voss.bochum@gmail.com>
+//               2022 Ingo Ruhnke <grumbel@gmail.com>
 //
 // This library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published
@@ -77,6 +78,7 @@ constexpr const char* xdg_data_dirs{"XDG_DATA_DIRS"};
 constexpr const char* xdg_config_home{"XDG_CONFIG_HOME"};
 constexpr const char* xdg_config_dirs{"XDG_CONFIG_DIRS"};
 constexpr const char* xdg_cache_home{"XDG_CACHE_HOME"};
+constexpr const char* xdg_state_home{"XDG_STATE_HOME"};
 constexpr const char* xdg_runtime_dir{"XDG_RUNTIME_DIR"};
 }
 
@@ -105,6 +107,11 @@ public:
         return config_;
     }
 
+    const xdg::State& state() const override
+    {
+        return state_;
+    }
+
     const xdg::Cache& cache() const override
     {
         return cache_;
@@ -118,6 +125,7 @@ public:
 private:
     xdg::Data data_;
     xdg::Config config_;
+    xdg::State state_;
     xdg::Cache cache_;
     xdg::Runtime runtime_;
 };
@@ -174,6 +182,15 @@ std::vector<fs::path> xdg::Config::dirs() const
     return result;
 }
 
+fs::path xdg::State::home() const
+{
+    auto v = env::get(env::xdg_state_home, "");
+    if (v.empty())
+        return throw_if_not_absolute(fs::path{env::get_or_throw("HOME")} / ".local" / "state");
+
+    return throw_if_not_absolute(fs::path(v));
+}
+
 fs::path xdg::Cache::home() const
 {
     auto v = env::get(env::xdg_cache_home, "");
@@ -209,6 +226,11 @@ const xdg::Data& xdg::data()
 const xdg::Config& xdg::config()
 {
     return impl::BaseDirSpecification::instance().config();
+}
+
+const xdg::State& xdg::state()
+{
+    return impl::BaseDirSpecification::instance().state();
 }
 
 const xdg::Cache& xdg::cache()

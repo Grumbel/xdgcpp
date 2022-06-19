@@ -1,4 +1,5 @@
 // Copyright (C) 2015 Thomas Voß <thomas.voss.bochum@gmail.com>
+//               2022 Ingo Ruhnke <grumbel@gmail.com>
 //
 // This library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published
@@ -68,6 +69,15 @@ public:
     virtual std::vector<std::filesystem::path> dirs() const;
 };
 
+// State provides functions to query the XDG_STATE_HOME entry.
+class State : NotCopyable, NotMoveable
+{
+public:
+    // home returns the base directory relative to which user specific
+    // non-essential data files should be stored.
+    virtual std::filesystem::path home() const;
+};
+
 // Cache provides functions to query the XDG_CACHE_HOME entry.
 class Cache : NotCopyable, NotMoveable
 {
@@ -99,6 +109,8 @@ public:
     virtual const Data& data() const = 0;
     // config returns an immutable Config instance.
     virtual const Config& config() const = 0;
+    // state returns an immutable Config instance.
+    virtual const State& state() const = 0;
     // cache returns an immutable Cache instance.
     virtual const Cache& cache() const = 0;
     // runtime returns an immutable Runtime instance.
@@ -111,6 +123,8 @@ protected:
 const Data& data();
 // config returns an immutable reference to a Config instance.
 const Config& config();
+// state returns an immutable reference to a State instance.
+const State& state();
 // cache returns an immutable reference to a Cache instance.
 const Cache& cache();
 // runtime returns an immutable reference to a Runtime instance.

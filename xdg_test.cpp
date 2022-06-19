@@ -99,6 +99,21 @@ BOOST_AUTO_TEST_CASE(XdgConfigDirsReturnsDefaultValueForEmptyEnv)
     BOOST_CHECK_EQUAL("/etc/xdg", dirs[0]);
 }
 
+BOOST_AUTO_TEST_CASE(XdgStateHomeThrowsForRelativeDirectoryFromEnv)
+{
+    ::setenv("XDG_STATE_HOME", "tmp", 1);
+    BOOST_CHECK_THROW(xdg::BaseDirSpecification::create()->state().home(), std::runtime_error);
+    BOOST_CHECK_THROW(xdg::state().home(), std::runtime_error);
+}
+
+BOOST_AUTO_TEST_CASE(XdgStateHomeReturnsDefaultValueForEmptyEnv)
+{
+    ::setenv("HOME", "/tmp", 1);
+    ::setenv("XDG_STATE_HOME", "", 1);
+    BOOST_CHECK_EQUAL("/tmp/.local/state", xdg::BaseDirSpecification::create()->state().home());
+    BOOST_CHECK_EQUAL("/tmp/.local/state", xdg::state().home());
+}
+
 BOOST_AUTO_TEST_CASE(XdgCacheHomeThrowsForRelativeDirectoryFromEnv)
 {
     ::setenv("XDG_CACHE_HOME", "tmp", 1);
