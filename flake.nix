@@ -16,8 +16,15 @@
             pname = "xdgcpp";
             version = "0.1.0";
             src = nixpkgs.lib.cleanSource ./.;
-            nativeBuildInputs = [
-              pkgs.cmake
+            cmakeFlags = [
+              "-DXDG_BUILD_TESTS=ON"
+            ];
+            doCheck = true;
+            nativeBuildInputs = with pkgs; [
+              cmake
+            ];
+            buildInputs = with pkgs; [
+              boost
             ];
            };
         };
