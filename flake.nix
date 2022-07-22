@@ -23,7 +23,7 @@
             nativeBuildInputs = with pkgs; [
               cmake
             ];
-            buildInputs = with pkgs; [
+            checkInputs = with pkgs; [
               boost
             ];
           };
