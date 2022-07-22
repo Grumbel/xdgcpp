@@ -10,8 +10,8 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-      in rec {
-        packages = flake-utils.lib.flattenTree {
+      in {
+        packages = flake-utils.lib.flattenTree rec {
           xdgcpp = pkgs.stdenv.mkDerivation {
             pname = "xdgcpp";
             version = "0.1.0";
@@ -26,8 +26,9 @@
             buildInputs = with pkgs; [
               boost
             ];
-           };
+          };
+          default = xdgcpp;
         };
-        defaultPackage = packages.xdgcpp;
-      });
+      }
+    );
 }
