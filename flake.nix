@@ -2,7 +2,7 @@
   description = "XDG Base Directory Specification in C++11";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.11";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -11,8 +11,10 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
       in {
-        packages = flake-utils.lib.flattenTree rec {
-          xdgcpp = pkgs.stdenv.mkDerivation {
+        packages = rec {
+          default = xdgcpp;
+
+          xdgcpp = pkgs.gcc12Stdenv.mkDerivation {
             pname = "xdgcpp";
             version = "0.1.0";
             src = nixpkgs.lib.cleanSource ./.;
@@ -27,7 +29,6 @@
               boost
             ];
           };
-          default = xdgcpp;
         };
       }
     );
