@@ -2,7 +2,7 @@
   description = "XDG Base Directory Specification in C++11";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.05";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -17,14 +17,19 @@
           xdgcpp = pkgs.gcc12Stdenv.mkDerivation {
             pname = "xdgcpp";
             version = "0.1.0";
-            src = nixpkgs.lib.cleanSource ./.;
+
+            src = ./.;
+
             cmakeFlags = [
               "-DXDG_BUILD_TESTS=ON"
             ];
+
             doCheck = true;
+
             nativeBuildInputs = with pkgs; [
               cmake
             ];
+
             checkInputs = with pkgs; [
               boost
             ];
