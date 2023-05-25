@@ -10,7 +10,7 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-      in {
+      in rec {
         packages = rec {
           default = xdgcpp;
 
@@ -33,6 +33,15 @@
             checkInputs = with pkgs; [
               boost
             ];
+          };
+        };
+
+        apps = rec {
+          default = xdgcpp-info;
+
+          xdgcpp-info = flake-utils.lib.mkApp {
+            drv = packages.xdgcpp;
+            exePath = "/bin/xdgcpp-info";
           };
         };
       }
