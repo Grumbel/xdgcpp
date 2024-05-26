@@ -22,12 +22,17 @@ if(XDG_BUILD_TESTS)
   find_package(Boost COMPONENTS unit_test_framework REQUIRED)
 
   enable_testing()
-  add_definitions(-DBOOST_TEST_DYN_LINK -DBOOST_TEST_MAIN -DBOOST_TEST_MODULE=xdgcpp)
   add_executable(xdgcpp_test src/xdg_test.cpp)
   set_property(TARGET xdgcpp_test PROPERTY CXX_STANDARD 17)
-  target_link_libraries(xdgcpp_test xdgcpp)
-  target_link_libraries(xdgcpp_test ${Boost_LIBRARIES})
-  target_include_directories(xdgcpp_test PRIVATE ${Boost_INCLUDE_DIRS})
+  target_compile_definitions(xdgcpp_test PRIVATE
+    -DBOOST_TEST_DYN_LINK
+    -DBOOST_TEST_MAIN
+    -DBOOST_TEST_MODULE=xdgcpp
+    )
+  target_link_libraries(xdgcpp_test
+    xdgcpp
+    Boost::unit_test_framework
+    )
 
   add_test(xdgcpp_test xdgcpp_test)
 endif()
