@@ -2,7 +2,7 @@
   description = "XDG Base Directory Specification in C++11";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.05";
+    nixpkgs.url = "github:NixOS/nixpkgs?ref=nixos-24.05";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -14,7 +14,7 @@
         packages = rec {
           default = xdgcpp;
 
-          xdgcpp = pkgs.gcc12Stdenv.mkDerivation {
+          xdgcpp = pkgs.stdenv.mkDerivation {
             pname = "xdgcpp";
             version = "0.1.0";
 
