@@ -21,37 +21,39 @@
 #include <iterator>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace fs = std::filesystem;
 
 namespace
 {
 
+// Split a colon-separated PATH-style string into components.
+// Empty components (from leading/trailing/double colons) are preserved
+// so the caller can decide to ignore them.
 std::vector<std::string> path_split(const std::string& path)
 {
-  std::vector<std::string> result;
-  std::size_t end = path.find(':');
+    std::vector<std::string> result;
+    std::size_t end = path.find(':');
 
-  std::size_t start = 0;
-  while (end != std::string::npos)
-  {
+    std::size_t start = 0;
+    while (end != std::string::npos)
+    {
+        result.push_back(path.substr(start, end - start));
+        start = end + 1;
+        end = path.find(':', start);
+    }
+
     result.push_back(path.substr(start, end - start));
-
-    start = end + 1;
-    end = path.find(':', start);
-  }
-
-  result.push_back(path.substr(start, end - start));
-
-  return result;
+    return result;
 }
 
-fs::path throw_if_not_absolute(const fs::path& p)
+// Return true if the path is absolute (and therefore a candidate for use).
+// Relative paths and the empty path are invalid per the XDG spec and must
+// be ignored.
+bool is_valid_xdg_path(const fs::path& p)
 {
-    if (p.has_root_directory())
-        return p;
-
-    throw std::runtime_error{"Directores MUST be absolute."};
+    return p.is_absolute();
 }
 
 namespace env
@@ -66,10 +68,7 @@ std::string get(const std::string& key, const std::string& default_value)
 std::string get_or_throw(const std::string& key)
 {
     if (const char* value = std::getenv(key.c_str()))
-    {
         return value;
-    }
-
     throw std::runtime_error{key + " not set in environment"};
 }
 
@@ -82,6 +81,15 @@ constexpr const char* xdg_state_home{"XDG_STATE_HOME"};
 constexpr const char* xdg_runtime_dir{"XDG_RUNTIME_DIR"};
 }
 
+// Require that HOME is set and absolute; used when constructing defaults.
+fs::path home_or_throw()
+{
+    fs::path home{env::get_or_throw("HOME")};
+    if (!is_valid_xdg_path(home))
+        throw std::runtime_error{"HOME must be an absolute path"};
+    return home;
+}
+
 namespace impl
 {
 class BaseDirSpecification : public xdg::BaseDirSpecification
@@ -91,10 +99,6 @@ public:
     {
         static const BaseDirSpecification spec;
         return spec;
-    }
-
-    BaseDirSpecification()
-    {
     }
 
     const xdg::Data& data() const override
@@ -135,10 +139,10 @@ private:
 fs::path xdg::Data::home() const
 {
     auto v = env::get(env::xdg_data_home, "");
-    if (v.empty())
-        return throw_if_not_absolute(fs::path{env::get_or_throw("HOME")} / ".local" / "share");
-
-    return throw_if_not_absolute(fs::path(v));
+    fs::path p{v};
+    if (v.empty() || !is_valid_xdg_path(p))
+        return home_or_throw() / ".local" / "share";
+    return p;
 }
 
 std::vector<fs::path> xdg::Data::dirs() const
@@ -147,23 +151,29 @@ std::vector<fs::path> xdg::Data::dirs() const
     if (v.empty())
         return {fs::path{"/usr/local/share"}, fs::path{"/usr/share"}};
 
-    std::vector<std::string> tokens = path_split(v);
     std::vector<fs::path> result;
-    result.reserve(tokens.size());
-    for (const auto& token : tokens)
+    for (const auto& token : path_split(v))
     {
-        result.push_back(throw_if_not_absolute(fs::path(token)));
+        fs::path p{token};
+        if (is_valid_xdg_path(p))
+            result.push_back(std::move(p));
     }
+
+    // Spec: if the variable is not set or empty → defaults.
+    // After discarding relative/empty entries an empty list is treated the
+    // same way (common, practical reading of the "ignore invalid" rule).
+    if (result.empty())
+        return {fs::path{"/usr/local/share"}, fs::path{"/usr/share"}};
     return result;
 }
 
 fs::path xdg::Config::home() const
 {
     auto v = env::get(env::xdg_config_home, "");
-    if (v.empty())
-        return throw_if_not_absolute(fs::path{env::get_or_throw("HOME")} / ".config");
-
-    return throw_if_not_absolute(fs::path(v));
+    fs::path p{v};
+    if (v.empty() || !is_valid_xdg_path(p))
+        return home_or_throw() / ".config";
+    return p;
 }
 
 std::vector<fs::path> xdg::Config::dirs() const
@@ -172,45 +182,47 @@ std::vector<fs::path> xdg::Config::dirs() const
     if (v.empty())
         return {fs::path{"/etc/xdg"}};
 
-    std::vector<std::string> tokens = path_split(v);
     std::vector<fs::path> result;
-    for (const auto& token : tokens)
+    for (const auto& token : path_split(v))
     {
-        fs::path p(token);
-        result.push_back(throw_if_not_absolute(p));
+        fs::path p{token};
+        if (is_valid_xdg_path(p))
+            result.push_back(std::move(p));
     }
+
+    if (result.empty())
+        return {fs::path{"/etc/xdg"}};
     return result;
 }
 
 fs::path xdg::State::home() const
 {
     auto v = env::get(env::xdg_state_home, "");
-    if (v.empty())
-        return throw_if_not_absolute(fs::path{env::get_or_throw("HOME")} / ".local" / "state");
-
-    return throw_if_not_absolute(fs::path(v));
+    fs::path p{v};
+    if (v.empty() || !is_valid_xdg_path(p))
+        return home_or_throw() / ".local" / "state";
+    return p;
 }
 
 fs::path xdg::Cache::home() const
 {
     auto v = env::get(env::xdg_cache_home, "");
-    if (v.empty())
-        return throw_if_not_absolute(fs::path{env::get_or_throw("HOME")} / ".cache");
-
-    return throw_if_not_absolute(fs::path(v));
+    fs::path p{v};
+    if (v.empty() || !is_valid_xdg_path(p))
+        return home_or_throw() / ".cache";
+    return p;
 }
 
 fs::path xdg::Runtime::dir() const
 {
     auto v = env::get(env::xdg_runtime_dir, "");
-    if (v.empty())
-    {
-        // We do not fall back gracefully and instead throw, dispatching to calling
-        // code for handling the case of a safe user-specfic runtime directory missing.
+    fs::path p{v};
+    // Relative or empty is treated as unset.  The specification recommends
+    // a secure fallback + warning, but constructing one is outside the scope
+    // of this library; callers must handle the missing directory.
+    if (v.empty() || !is_valid_xdg_path(p))
         throw std::runtime_error{"Runtime directory not set"};
-    }
-
-    return throw_if_not_absolute(fs::path(v));
+    return p;
 }
 
 std::shared_ptr<xdg::BaseDirSpecification> xdg::BaseDirSpecification::create()
