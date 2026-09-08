@@ -33,6 +33,20 @@ Spec: https://specifications.freedesktop.org/basedir-spec/latest/
 5. **HOME**
    - Still required to be absolute when defaults are materialised. A relative
      or missing HOME is a broken environment and produces an exception.
+   - Covered by unit tests.
+
+### Test / CI coverage
+
+- Boost.Test suite (`src/xdg_test.cpp`) covers:
+  - absolute vs relative vs empty vs unset for every XDG_* variable
+  - multi-value dirs with mixed relative/absolute/empty components
+  - fallback to specification defaults
+  - missing / relative HOME when a default is required
+  - free functions and `BaseDirSpecification::create()` paths
+- CMake registers the suite with CTest (`ctest` / `make test`).
+- Nix flake:
+  - `doCheck = true` runs ctest during the build
+  - `checks.xdgcpp` is exposed so `nix flake check` exercises the suite
 
 ### Other notes (no change required)
 
@@ -47,6 +61,8 @@ Spec: https://specifications.freedesktop.org/basedir-spec/latest/
       major version so callers can handle the missing case without exceptions.
 - [ ] Windows path-separator support if the library is ever ported.
 
-### Commits in this work
+### Commits in this workstream
 
 - Ignore relative paths per XDG spec (and update tests)
+- Document XDG conformance audit and remaining notes
+- Expand unit tests and wire `nix flake check` / ctest
