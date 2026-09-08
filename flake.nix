@@ -11,18 +11,18 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
-        xdgcpp = pkgs.stdenv.mkDerivation {
+        xdgcpp = pkgs.stdenv.mkDerivation (finalAttrs: {
           pname = "xdgcpp";
           version = "0.1.0";
 
-          src = ./.;
+          src = pkgs.lib.cleanSource ./.;
 
           cmakeFlags = [
             "-DXDG_BUILD_TESTS=ON"
+            "-DXDG_BUILD_INFO=ON"
           ];
 
-          # The Boost unit-test suite is built and then executed via ctest
-          # during the check phase.
+          # Build + run the Boost unit-test suite via ctest.
           doCheck = true;
 
           nativeBuildInputs = with pkgs; [
@@ -31,7 +31,14 @@
             # binary is compiled when XDG_BUILD_TESTS=ON (before check).
             boost
           ];
-        };
+
+          meta = with pkgs.lib; {
+            description = "XDG Base Directory Specification implementation in C++";
+            homepage = "https://github.com/grumbel/xdgcpp";
+            license = licenses.lgpl3Plus;
+            platforms = platforms.unix;
+          };
+        });
       in
       rec {
         packages = {
@@ -40,9 +47,6 @@
         };
 
         # `nix flake check` builds every attribute under checks.*.
-        # Building the package already runs the full ctest suite via
-        # doCheck, so exposing the package here is sufficient and keeps
-        # failures visible under `nix flake check`.
         checks = {
           inherit xdgcpp;
         };

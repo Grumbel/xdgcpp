@@ -1,23 +1,33 @@
-# xdg [![Build Status](https://travis-ci.org/vosst/xdg.svg?branch=master)](https://travis-ci.org/vosst/xdg)
+# xdgcpp
 
-A straightforward implementation of the XDG Base Directory Specification in C++11.
-I became tired of retyping and retesting the same functionality over and over again,
-so I decided to place my own little helper here.
+A straightforward implementation of the
+[XDG Base Directory Specification](https://specifications.freedesktop.org/basedir-spec/latest/)
+in C++17.
 
 ## Dependencies
 
- - boost::filesystem: For handling all things filesystem paths.
- - boost::system:: Required by boost::filesystem.
- - boost::test: For testing purposes obviously.
+- A C++17 compiler with `<filesystem>` support
+- **Boost.Test** — only when building the unit-test suite
+  (`-DXDG_BUILD_TESTS=ON`)
 
-Install with
+## Build
+
 ```bash
-sudo apt-get install libboost-filesystem-dev libboost-system-dev libboost-test-dev
+cmake -B build -DXDG_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build --output-on-failure
+cmake --install build
 ```
 
-## Quick'n'Easy Integration
+Nix:
 
-xdg provides free functions that are easy to integrate with existing projects.
+```bash
+nix build
+nix flake check
+```
+
+## Quick integration (installed package)
+
 ```cpp
 #include <xdg.h>
 
@@ -25,19 +35,46 @@ xdg provides free functions that are easy to integrate with existing projects.
 
 int main()
 {
-	std::cout << xdg::data().home() << std::endl;
-	std::cout << xdg::config().home() << std::endl;
-	std::cout << xdg::cache().home() << std::endl;
-	std::cout << xdg::runtime().dir() << std::endl;
-
-	return 0;
+    std::cout << xdg::data().home() << std::endl;
+    std::cout << xdg::config().home() << std::endl;
+    std::cout << xdg::cache().home() << std::endl;
+    std::cout << xdg::runtime().dir() << std::endl;
+    return 0;
 }
 ```
 
-## Complete Integration
+```cmake
+find_package(xdgcpp REQUIRED)
+target_link_libraries(myapp PRIVATE xdgcpp::xdgcpp)
+```
 
-The interface xdg::BaseDirSpecification can be used to integrate xdg base directory
-queries into a code base such that interaction with the xdg::BaseDirSpecification is testable.
+Or via pkg-config: `pkg-config --cflags --libs xdgcpp`.
+
+## Use as a subdirectory
+
+xdgcpp is designed to be embedded with `add_subdirectory` (for example as a
+git submodule or a vendored copy).  Install rules are skipped automatically
+when the project is not the top-level CMake project.
+
+```cmake
+# in your top-level CMakeLists.txt
+add_subdirectory(third_party/xdgcpp)   # or wherever you placed it
+
+target_link_libraries(myapp PRIVATE xdgcpp::xdgcpp)
+# #include <xdg.h> works via the target's INTERFACE include directories
+```
+
+You can still enable tests of the embedded copy if desired:
+
+```cmake
+set(XDG_BUILD_TESTS ON CACHE BOOL "" FORCE)
+add_subdirectory(third_party/xdgcpp)
+```
+
+## Complete integration (testable interface)
+
+The interface `xdg::BaseDirSpecification` can be used so that interaction
+with the XDG paths is mockable in unit tests.
 
 ```cpp
 #include <xdg.h>
@@ -45,43 +82,22 @@ queries into a code base such that interaction with the xdg::BaseDirSpecificatio
 class MyClass
 {
 public:
-    MyClass(const std::shared_ptr<xdg::BaseDirSpecification>& bds) : bds{bds}
+    explicit MyClass(const std::shared_ptr<xdg::BaseDirSpecification>& bds)
+        : bds{bds}
     {
     }
 
     void do_something()
     {
-        // Query the user-specific config directory.
         auto path = bds->config().home();
-        // Do something with the config files.
+        // ...
     }
+
 private:
-	std::shared_ptr<xdg::BaseDirSpecification> bds;
+    std::shared_ptr<xdg::BaseDirSpecification> bds;
 };
-
-// In the testing setup, under the assumption of Google Test and Google Mock.
-namespace
-{
-struct MockConfig : public xdg::Config
-{
-    // ...
-};
-struct MockBaseDirSpecification : public xdg::BaseDirSpecification
-{
-    // ...
-};
-}
-
-TEST(MyClass, do_something_queries_config_home_directory)
-{
-    using namespace ::testing;
-    auto config = std::make_shared<NiceMock<MockConfig>>();
-    EXPECT_CALL(*config, home()).Times(1).ReturnRepeatedly("/tmp");
-
-    auto bds = std::make_shared<NiceMock<MockBaseDirSpecification>>();
-    ON_CALL(*bds, config()).WillByDefault(ReturnRef(*config));
-
-    MyClass mc{bds};
-    mc.do_something();
-}
 ```
+
+## License
+
+GNU Lesser General Public License v3.0 or later (LGPL-3.0-or-later).

@@ -4,65 +4,45 @@
 
 Spec: https://specifications.freedesktop.org/basedir-spec/latest/
 
-### Shortcomings found and fixed
+### Spec conformance (done)
 
-1. **Relative paths were thrown as errors instead of ignored** (fixed)
-   - Spec §2: "All paths set in these environment variables must be absolute.
-     If an implementation encounters a relative path in any of these variables
-     it should consider the path invalid and ignore it."
-   - Previous code raised `std::runtime_error` via `throw_if_not_absolute`.
-   - Now relative (and empty) paths are silently ignored.
+1. Relative paths ignored (not thrown).
+2. Multi-value dirs: keep absolute entries; empty after filter → defaults.
+3. `XDG_RUNTIME_DIR` still throws when unset/empty/relative (secure fallback out of scope).
+4. `HOME` must be absolute when defaults are used.
 
-2. **Multi-value vars after filtering** (fixed)
-   - For `XDG_DATA_DIRS` / `XDG_CONFIG_DIRS`: keep only absolute entries.
-   - If the resulting list is empty (variable was empty, unset, or contained
-     only relative/empty components) fall back to the specification defaults.
-   - Matches practical behaviour of other solid implementations.
+### Test / CI (done)
 
-3. **Empty path components** (fixed)
-   - Leading/trailing/double colons produce empty strings → treated as
-     relative → ignored.
+- Boost.Test suite covers unset/empty/relative/absolute for every variable.
+- CMake registers the suite with CTest.
+- Flake exposes `checks.xdgcpp` and runs tests via `doCheck`.
 
-4. **XDG_RUNTIME_DIR** (unchanged behaviour, documented)
-   - Spec recommends a secure fallback + warning when unset.
-   - Providing a correctly-permissioned, login-lifetime, local-fs directory
-     is outside the scope of a pure path-query library. The library continues
-     to throw when the variable is unset/empty/relative so callers can decide
-     how to recover.
+### CMake / packaging audit (done)
 
-5. **HOME**
-   - Still required to be absolute when defaults are materialised. A relative
-     or missing HOME is a broken environment and produces an exception.
-   - Covered by unit tests.
+Fixed issues:
 
-### Test / CI coverage
+1. **xdgcpp-config.cmake.in typo** (`xdgpp` → proper `@PACKAGE_INIT@` + targets include).
+2. **Static library destinations**: `ARCHIVE` + `LIBRARY` → `${CMAKE_INSTALL_LIBDIR}` (not `lib/xdgcpp/`).
+3. **pkg-config `-L`** now matches the actual archive location.
+4. **Removed obsolete `export(PACKAGE)`**.
+5. **Namespaced alias** `xdgcpp::xdgcpp` for consumers.
+6. **`add_subdirectory` support**:
+   - Install / export rules run only when this project is top-level
+     (`CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME`).
+   - Parent can `add_subdirectory(...)` and `target_link_libraries(... xdgcpp::xdgcpp)`.
+   - `BUILD_INTERFACE` include path points at the source `include/` directory.
+7. **xdgcpp-info** installed to `bin/` but not exported in the package targets.
+8. **Package version file** generated for `find_package` version checks.
+9. **README** updated (no boost::filesystem; documents find_package and subdirectory).
+10. **Flake** uses `lib.cleanSource`, has `meta`, keeps tests on the check path.
 
-- Boost.Test suite (`src/xdg_test.cpp`) covers:
-  - absolute vs relative vs empty vs unset for every XDG_* variable
-  - multi-value dirs with mixed relative/absolute/empty components
-  - fallback to specification defaults
-  - missing / relative HOME when a default is required
-  - free functions and `BaseDirSpecification::create()` paths
-- CMake registers the suite with CTest (`ctest` / `make test`).
-- Nix flake:
-  - `doCheck = true` runs ctest during the build
-  - `checks.xdgcpp` is exposed so `nix flake check` exercises the suite
+Verified locally:
 
-### Other notes (no change required)
-
-- Defaults match the current spec (including `XDG_STATE_HOME`).
-- Library only returns paths; it does not create directories or set modes.
-- `$HOME/.local/bin` is an informational recommendation only.
-- Path separator is hard-coded to `:` (Unix). Acceptable for this project.
+- `find_package(xdgcpp)` + `target_link_libraries(... xdgcpp::xdgcpp)` builds and runs.
+- `add_subdirectory(xdgcpp)` + same link line builds and runs; parent `cmake --install` does not install the embedded library.
+- `pkg-config --cflags --libs xdgcpp` returns correct flags.
 
 ### Remaining / future
 
-- [ ] Consider returning `std::optional` for `runtime().dir()` in a future
-      major version so callers can handle the missing case without exceptions.
-- [ ] Windows path-separator support if the library is ever ported.
-
-### Commits in this workstream
-
-- Ignore relative paths per XDG spec (and update tests)
-- Document XDG conformance audit and remaining notes
-- Expand unit tests and wire `nix flake check` / ctest
+- [ ] Optional `std::optional` for `runtime().dir()` in a future major version.
+- [ ] Windows path-separator support if ever ported.
