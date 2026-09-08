@@ -7,8 +7,9 @@ in C++17.
 ## Dependencies
 
 - A C++17 compiler with `<filesystem>` support
-- **Boost.Test** — only when building the unit-test suite
-  (`-DXDG_BUILD_TESTS=ON`)
+
+No third-party libraries are required. The optional unit-test suite is
+self-contained (a few macros in `src/xdg_test.cpp`).
 
 ## Build
 

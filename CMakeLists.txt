@@ -64,8 +64,6 @@ endif()
 # ---------------------------------------------------------------------------
 
 if(XDG_BUILD_TESTS)
-  find_package(Boost COMPONENTS unit_test_framework REQUIRED)
-
   enable_testing()
   add_executable(xdgcpp_test src/xdg_test.cpp)
   set_target_properties(xdgcpp_test PROPERTIES
@@ -73,16 +71,7 @@ if(XDG_BUILD_TESTS)
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
   )
-  target_compile_definitions(xdgcpp_test PRIVATE
-    BOOST_TEST_DYN_LINK
-    BOOST_TEST_MAIN
-    BOOST_TEST_MODULE=xdgcpp
-  )
-  target_link_libraries(xdgcpp_test
-    PRIVATE
-      xdgcpp::xdgcpp
-      Boost::unit_test_framework
-  )
+  target_link_libraries(xdgcpp_test PRIVATE xdgcpp::xdgcpp)
 
   add_test(NAME xdgcpp_test COMMAND xdgcpp_test)
   set_tests_properties(xdgcpp_test PROPERTIES TIMEOUT 30)

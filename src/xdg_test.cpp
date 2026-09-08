@@ -16,17 +16,100 @@
 
 #include <xdg.h>
 
-#include <boost/test/unit_test.hpp>
-
 #include <cstdlib>
+#include <exception>
+#include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
+// ---------------------------------------------------------------------------
+// Minimal test harness (no third-party dependency)
+// ---------------------------------------------------------------------------
+
 namespace
 {
+int g_failures = 0;
+int g_checks = 0;
+
+struct TestCase
+{
+    const char* name;
+    void (*fn)();
+};
+
+std::vector<TestCase>& registry()
+{
+    static std::vector<TestCase> tests;
+    return tests;
+}
+
+struct Registrar
+{
+    Registrar(const char* name, void (*fn)())
+    {
+        registry().push_back({name, fn});
+    }
+};
+
+#define TEST(name)                                                             \
+    void name();                                                               \
+    static Registrar registrar_##name(#name, &name);                           \
+    void name()
+
+void fail(const char* file, int line, const std::string& msg)
+{
+    ++g_failures;
+    std::cerr << file << ":" << line << ": check failed: " << msg << "\n";
+}
+
+#define CHECK(expr)                                                            \
+    do {                                                                       \
+        ++g_checks;                                                            \
+        if (!(expr))                                                           \
+            fail(__FILE__, __LINE__, #expr);                                   \
+    } while (0)
+
+template <typename A, typename B>
+void check_equal(const char* file, int line, const A& a, const B& b,
+                 const char* a_str, const char* b_str)
+{
+    ++g_checks;
+    if (!(a == b))
+    {
+        std::ostringstream os;
+        os << a_str << " == " << b_str << "  (" << a << " != " << b << ")";
+        fail(file, line, os.str());
+    }
+}
+
+#define CHECK_EQUAL(a, b) check_equal(__FILE__, __LINE__, (a), (b), #a, #b)
+
+#define CHECK_THROW(expr, exctype)                                             \
+    do {                                                                       \
+        ++g_checks;                                                            \
+        bool threw = false;                                                    \
+        try                                                                    \
+        {                                                                      \
+            (void)(expr);                                                      \
+        }                                                                      \
+        catch (const exctype&)                                                 \
+        {                                                                      \
+            threw = true;                                                      \
+        }                                                                      \
+        catch (...)                                                            \
+        {                                                                      \
+            fail(__FILE__, __LINE__,                                           \
+                 std::string(#expr) + " threw unexpected exception type");    \
+            break;                                                             \
+        }                                                                      \
+        if (!threw)                                                            \
+            fail(__FILE__, __LINE__,                                           \
+                 std::string(#expr) + " did not throw " + #exctype);           \
+    } while (0)
+
 // Clear every XDG-related variable so tests start from a known state.
-// setenv(..., "", 1) makes the variable present but empty; unsetenv removes it.
 void clear_xdg_env()
 {
     ::unsetenv("XDG_DATA_HOME");
@@ -48,324 +131,380 @@ void set_home(const char* value)
 // XDG_DATA_HOME
 // ---------------------------------------------------------------------------
 
-BOOST_AUTO_TEST_CASE(XdgDataHomeIgnoresRelativeDirectoryFromEnv)
+TEST(XdgDataHomeIgnoresRelativeDirectoryFromEnv)
 {
     clear_xdg_env();
     set_home("/tmp");
     ::setenv("XDG_DATA_HOME", "tmp", 1);
-    BOOST_CHECK_EQUAL("/tmp/.local/share", xdg::BaseDirSpecification::create()->data().home());
-    BOOST_CHECK_EQUAL("/tmp/.local/share", xdg::data().home());
+    CHECK_EQUAL(xdg::BaseDirSpecification::create()->data().home(),
+                "/tmp/.local/share");
+    CHECK_EQUAL(xdg::data().home(), "/tmp/.local/share");
 }
 
-BOOST_AUTO_TEST_CASE(XdgDataHomeReturnsDefaultValueForEmptyEnv)
+TEST(XdgDataHomeReturnsDefaultValueForEmptyEnv)
 {
     clear_xdg_env();
     set_home("/tmp");
     ::setenv("XDG_DATA_HOME", "", 1);
-    BOOST_CHECK_EQUAL("/tmp/.local/share", xdg::BaseDirSpecification::create()->data().home());
-    BOOST_CHECK_EQUAL("/tmp/.local/share", xdg::data().home());
+    CHECK_EQUAL(xdg::BaseDirSpecification::create()->data().home(),
+                "/tmp/.local/share");
+    CHECK_EQUAL(xdg::data().home(), "/tmp/.local/share");
 }
 
-BOOST_AUTO_TEST_CASE(XdgDataHomeReturnsDefaultValueWhenUnset)
+TEST(XdgDataHomeReturnsDefaultValueWhenUnset)
 {
     clear_xdg_env();
     set_home("/tmp");
-    // Variable not present at all
-    BOOST_CHECK_EQUAL("/tmp/.local/share", xdg::data().home());
+    CHECK_EQUAL(xdg::data().home(), "/tmp/.local/share");
 }
 
-BOOST_AUTO_TEST_CASE(XdgDataHomeUsesAbsoluteEnvValue)
+TEST(XdgDataHomeUsesAbsoluteEnvValue)
 {
     clear_xdg_env();
     set_home("/tmp");
     ::setenv("XDG_DATA_HOME", "/custom/data", 1);
-    BOOST_CHECK_EQUAL("/custom/data", xdg::BaseDirSpecification::create()->data().home());
-    BOOST_CHECK_EQUAL("/custom/data", xdg::data().home());
+    CHECK_EQUAL(xdg::BaseDirSpecification::create()->data().home(),
+                "/custom/data");
+    CHECK_EQUAL(xdg::data().home(), "/custom/data");
 }
 
-BOOST_AUTO_TEST_CASE(XdgDataHomeThrowsWhenHomeMissing)
+TEST(XdgDataHomeThrowsWhenHomeMissing)
 {
     clear_xdg_env();
     ::unsetenv("HOME");
-    BOOST_CHECK_THROW(xdg::data().home(), std::runtime_error);
+    CHECK_THROW(xdg::data().home(), std::runtime_error);
 }
 
-BOOST_AUTO_TEST_CASE(XdgDataHomeThrowsWhenHomeRelative)
+TEST(XdgDataHomeThrowsWhenHomeRelative)
 {
     clear_xdg_env();
     set_home("relative-home");
-    BOOST_CHECK_THROW(xdg::data().home(), std::runtime_error);
+    CHECK_THROW(xdg::data().home(), std::runtime_error);
 }
 
 // ---------------------------------------------------------------------------
 // XDG_DATA_DIRS
 // ---------------------------------------------------------------------------
 
-BOOST_AUTO_TEST_CASE(XdgDataDirsCorrectlyTokenizesEnv)
+TEST(XdgDataDirsCorrectlyTokenizesEnv)
 {
     clear_xdg_env();
     ::setenv("XDG_DATA_DIRS", "/tmp:/var", 1);
     auto dirs = xdg::BaseDirSpecification::create()->data().dirs();
-    BOOST_REQUIRE_EQUAL(2u, dirs.size());
-    BOOST_CHECK_EQUAL("/tmp", dirs[0]);
-    BOOST_CHECK_EQUAL("/var", dirs[1]);
+    CHECK_EQUAL(dirs.size(), 2u);
+    CHECK_EQUAL(dirs[0], "/tmp");
+    CHECK_EQUAL(dirs[1], "/var");
     dirs = xdg::data().dirs();
-    BOOST_REQUIRE_EQUAL(2u, dirs.size());
+    CHECK_EQUAL(dirs.size(), 2u);
 }
 
-BOOST_AUTO_TEST_CASE(XdgDataDirsIgnoresRelativeEntries)
+TEST(XdgDataDirsIgnoresRelativeEntries)
 {
     clear_xdg_env();
     ::setenv("XDG_DATA_DIRS", "/tmp:tmp:/usr/share", 1);
     auto dirs = xdg::data().dirs();
-    BOOST_REQUIRE_EQUAL(2u, dirs.size());
-    BOOST_CHECK_EQUAL("/tmp", dirs[0]);
-    BOOST_CHECK_EQUAL("/usr/share", dirs[1]);
+    CHECK_EQUAL(dirs.size(), 2u);
+    CHECK_EQUAL(dirs[0], "/tmp");
+    CHECK_EQUAL(dirs[1], "/usr/share");
 }
 
-BOOST_AUTO_TEST_CASE(XdgDataDirsFallsBackWhenAllRelative)
+TEST(XdgDataDirsFallsBackWhenAllRelative)
 {
     clear_xdg_env();
     ::setenv("XDG_DATA_DIRS", "tmp:relative", 1);
     auto dirs = xdg::data().dirs();
-    BOOST_REQUIRE_EQUAL(2u, dirs.size());
-    BOOST_CHECK_EQUAL("/usr/local/share", dirs[0]);
-    BOOST_CHECK_EQUAL("/usr/share", dirs[1]);
+    CHECK_EQUAL(dirs.size(), 2u);
+    CHECK_EQUAL(dirs[0], "/usr/local/share");
+    CHECK_EQUAL(dirs[1], "/usr/share");
 }
 
-BOOST_AUTO_TEST_CASE(XdgDataDirsReturnsDefaultValueForEmptyEnv)
+TEST(XdgDataDirsReturnsDefaultValueForEmptyEnv)
 {
     clear_xdg_env();
     ::setenv("XDG_DATA_DIRS", "", 1);
     auto dirs = xdg::data().dirs();
-    BOOST_REQUIRE_EQUAL(2u, dirs.size());
-    BOOST_CHECK_EQUAL("/usr/local/share", dirs[0]);
-    BOOST_CHECK_EQUAL("/usr/share", dirs[1]);
+    CHECK_EQUAL(dirs.size(), 2u);
+    CHECK_EQUAL(dirs[0], "/usr/local/share");
+    CHECK_EQUAL(dirs[1], "/usr/share");
 
     dirs = xdg::BaseDirSpecification::create()->data().dirs();
-    BOOST_REQUIRE_EQUAL(2u, dirs.size());
-    BOOST_CHECK_EQUAL("/usr/local/share", dirs[0]);
-    BOOST_CHECK_EQUAL("/usr/share", dirs[1]);
+    CHECK_EQUAL(dirs.size(), 2u);
+    CHECK_EQUAL(dirs[0], "/usr/local/share");
+    CHECK_EQUAL(dirs[1], "/usr/share");
 }
 
-BOOST_AUTO_TEST_CASE(XdgDataDirsReturnsDefaultValueWhenUnset)
+TEST(XdgDataDirsReturnsDefaultValueWhenUnset)
 {
     clear_xdg_env();
     auto dirs = xdg::data().dirs();
-    BOOST_REQUIRE_EQUAL(2u, dirs.size());
-    BOOST_CHECK_EQUAL("/usr/local/share", dirs[0]);
-    BOOST_CHECK_EQUAL("/usr/share", dirs[1]);
+    CHECK_EQUAL(dirs.size(), 2u);
+    CHECK_EQUAL(dirs[0], "/usr/local/share");
+    CHECK_EQUAL(dirs[1], "/usr/share");
 }
 
-BOOST_AUTO_TEST_CASE(XdgDataDirsIgnoresEmptyComponents)
+TEST(XdgDataDirsIgnoresEmptyComponents)
 {
     clear_xdg_env();
     ::setenv("XDG_DATA_DIRS", "/tmp::/usr/share:", 1);
     auto dirs = xdg::data().dirs();
-    BOOST_REQUIRE_EQUAL(2u, dirs.size());
-    BOOST_CHECK_EQUAL("/tmp", dirs[0]);
-    BOOST_CHECK_EQUAL("/usr/share", dirs[1]);
+    CHECK_EQUAL(dirs.size(), 2u);
+    CHECK_EQUAL(dirs[0], "/tmp");
+    CHECK_EQUAL(dirs[1], "/usr/share");
 }
 
-BOOST_AUTO_TEST_CASE(XdgDataDirsSingleAbsoluteEntry)
+TEST(XdgDataDirsSingleAbsoluteEntry)
 {
     clear_xdg_env();
     ::setenv("XDG_DATA_DIRS", "/only/one", 1);
     auto dirs = xdg::data().dirs();
-    BOOST_REQUIRE_EQUAL(1u, dirs.size());
-    BOOST_CHECK_EQUAL("/only/one", dirs[0]);
+    CHECK_EQUAL(dirs.size(), 1u);
+    CHECK_EQUAL(dirs[0], "/only/one");
 }
 
 // ---------------------------------------------------------------------------
 // XDG_CONFIG_HOME
 // ---------------------------------------------------------------------------
 
-BOOST_AUTO_TEST_CASE(XdgConfigHomeIgnoresRelativeDirectoryFromEnv)
+TEST(XdgConfigHomeIgnoresRelativeDirectoryFromEnv)
 {
     clear_xdg_env();
     set_home("/tmp");
     ::setenv("XDG_CONFIG_HOME", "tmp", 1);
-    BOOST_CHECK_EQUAL("/tmp/.config", xdg::BaseDirSpecification::create()->config().home());
-    BOOST_CHECK_EQUAL("/tmp/.config", xdg::config().home());
+    CHECK_EQUAL(xdg::BaseDirSpecification::create()->config().home(),
+                "/tmp/.config");
+    CHECK_EQUAL(xdg::config().home(), "/tmp/.config");
 }
 
-BOOST_AUTO_TEST_CASE(XdgConfigHomeReturnsDefaultValueForEmptyEnv)
+TEST(XdgConfigHomeReturnsDefaultValueForEmptyEnv)
 {
     clear_xdg_env();
     set_home("/tmp");
     ::setenv("XDG_CONFIG_HOME", "", 1);
-    BOOST_CHECK_EQUAL("/tmp/.config", xdg::BaseDirSpecification::create()->config().home());
-    BOOST_CHECK_EQUAL("/tmp/.config", xdg::config().home());
+    CHECK_EQUAL(xdg::BaseDirSpecification::create()->config().home(),
+                "/tmp/.config");
+    CHECK_EQUAL(xdg::config().home(), "/tmp/.config");
 }
 
-BOOST_AUTO_TEST_CASE(XdgConfigHomeReturnsDefaultValueWhenUnset)
+TEST(XdgConfigHomeReturnsDefaultValueWhenUnset)
 {
     clear_xdg_env();
     set_home("/tmp");
-    BOOST_CHECK_EQUAL("/tmp/.config", xdg::config().home());
+    CHECK_EQUAL(xdg::config().home(), "/tmp/.config");
 }
 
-BOOST_AUTO_TEST_CASE(XdgConfigHomeUsesAbsoluteEnvValue)
+TEST(XdgConfigHomeUsesAbsoluteEnvValue)
 {
     clear_xdg_env();
     ::setenv("XDG_CONFIG_HOME", "/custom/config", 1);
-    BOOST_CHECK_EQUAL("/custom/config", xdg::config().home());
+    CHECK_EQUAL(xdg::config().home(), "/custom/config");
 }
 
 // ---------------------------------------------------------------------------
 // XDG_CONFIG_DIRS
 // ---------------------------------------------------------------------------
 
-BOOST_AUTO_TEST_CASE(XdgConfigDirsCorrectlyTokenizesEnv)
+TEST(XdgConfigDirsCorrectlyTokenizesEnv)
 {
     clear_xdg_env();
     ::setenv("XDG_CONFIG_DIRS", "/tmp:/etc", 1);
-    auto dirs = xdg::BaseDirSpecification::create()->config().dirs();
-    BOOST_REQUIRE_EQUAL(2u, dirs.size());
-    BOOST_CHECK_EQUAL(2u, xdg::config().dirs().size());
+    CHECK_EQUAL(xdg::BaseDirSpecification::create()->config().dirs().size(),
+                2u);
+    CHECK_EQUAL(xdg::config().dirs().size(), 2u);
 }
 
-BOOST_AUTO_TEST_CASE(XdgConfigDirsIgnoresRelativeEntries)
+TEST(XdgConfigDirsIgnoresRelativeEntries)
 {
     clear_xdg_env();
     ::setenv("XDG_CONFIG_DIRS", "/tmp:tmp:/etc/xdg", 1);
     auto dirs = xdg::config().dirs();
-    BOOST_REQUIRE_EQUAL(2u, dirs.size());
-    BOOST_CHECK_EQUAL("/tmp", dirs[0]);
-    BOOST_CHECK_EQUAL("/etc/xdg", dirs[1]);
+    CHECK_EQUAL(dirs.size(), 2u);
+    CHECK_EQUAL(dirs[0], "/tmp");
+    CHECK_EQUAL(dirs[1], "/etc/xdg");
 }
 
-BOOST_AUTO_TEST_CASE(XdgConfigDirsFallsBackWhenAllRelative)
+TEST(XdgConfigDirsFallsBackWhenAllRelative)
 {
     clear_xdg_env();
     ::setenv("XDG_CONFIG_DIRS", "tmp:relative", 1);
     auto dirs = xdg::config().dirs();
-    BOOST_REQUIRE_EQUAL(1u, dirs.size());
-    BOOST_CHECK_EQUAL("/etc/xdg", dirs[0]);
+    CHECK_EQUAL(dirs.size(), 1u);
+    CHECK_EQUAL(dirs[0], "/etc/xdg");
 }
 
-BOOST_AUTO_TEST_CASE(XdgConfigDirsReturnsDefaultValueForEmptyEnv)
+TEST(XdgConfigDirsReturnsDefaultValueForEmptyEnv)
 {
     clear_xdg_env();
     ::setenv("XDG_CONFIG_DIRS", "", 1);
     auto dirs = xdg::config().dirs();
-    BOOST_REQUIRE_EQUAL(1u, dirs.size());
-    BOOST_CHECK_EQUAL("/etc/xdg", dirs[0]);
+    CHECK_EQUAL(dirs.size(), 1u);
+    CHECK_EQUAL(dirs[0], "/etc/xdg");
     dirs = xdg::BaseDirSpecification::create()->config().dirs();
-    BOOST_CHECK_EQUAL("/etc/xdg", dirs[0]);
+    CHECK_EQUAL(dirs[0], "/etc/xdg");
 }
 
-BOOST_AUTO_TEST_CASE(XdgConfigDirsReturnsDefaultValueWhenUnset)
+TEST(XdgConfigDirsReturnsDefaultValueWhenUnset)
 {
     clear_xdg_env();
     auto dirs = xdg::config().dirs();
-    BOOST_REQUIRE_EQUAL(1u, dirs.size());
-    BOOST_CHECK_EQUAL("/etc/xdg", dirs[0]);
+    CHECK_EQUAL(dirs.size(), 1u);
+    CHECK_EQUAL(dirs[0], "/etc/xdg");
 }
 
 // ---------------------------------------------------------------------------
 // XDG_STATE_HOME
 // ---------------------------------------------------------------------------
 
-BOOST_AUTO_TEST_CASE(XdgStateHomeIgnoresRelativeDirectoryFromEnv)
+TEST(XdgStateHomeIgnoresRelativeDirectoryFromEnv)
 {
     clear_xdg_env();
     set_home("/tmp");
     ::setenv("XDG_STATE_HOME", "tmp", 1);
-    BOOST_CHECK_EQUAL("/tmp/.local/state", xdg::BaseDirSpecification::create()->state().home());
-    BOOST_CHECK_EQUAL("/tmp/.local/state", xdg::state().home());
+    CHECK_EQUAL(xdg::BaseDirSpecification::create()->state().home(),
+                "/tmp/.local/state");
+    CHECK_EQUAL(xdg::state().home(), "/tmp/.local/state");
 }
 
-BOOST_AUTO_TEST_CASE(XdgStateHomeReturnsDefaultValueForEmptyEnv)
+TEST(XdgStateHomeReturnsDefaultValueForEmptyEnv)
 {
     clear_xdg_env();
     set_home("/tmp");
     ::setenv("XDG_STATE_HOME", "", 1);
-    BOOST_CHECK_EQUAL("/tmp/.local/state", xdg::BaseDirSpecification::create()->state().home());
-    BOOST_CHECK_EQUAL("/tmp/.local/state", xdg::state().home());
+    CHECK_EQUAL(xdg::BaseDirSpecification::create()->state().home(),
+                "/tmp/.local/state");
+    CHECK_EQUAL(xdg::state().home(), "/tmp/.local/state");
 }
 
-BOOST_AUTO_TEST_CASE(XdgStateHomeReturnsDefaultValueWhenUnset)
+TEST(XdgStateHomeReturnsDefaultValueWhenUnset)
 {
     clear_xdg_env();
     set_home("/tmp");
-    BOOST_CHECK_EQUAL("/tmp/.local/state", xdg::state().home());
+    CHECK_EQUAL(xdg::state().home(), "/tmp/.local/state");
 }
 
-BOOST_AUTO_TEST_CASE(XdgStateHomeUsesAbsoluteEnvValue)
+TEST(XdgStateHomeUsesAbsoluteEnvValue)
 {
     clear_xdg_env();
     ::setenv("XDG_STATE_HOME", "/custom/state", 1);
-    BOOST_CHECK_EQUAL("/custom/state", xdg::state().home());
+    CHECK_EQUAL(xdg::state().home(), "/custom/state");
 }
 
 // ---------------------------------------------------------------------------
 // XDG_CACHE_HOME
 // ---------------------------------------------------------------------------
 
-BOOST_AUTO_TEST_CASE(XdgCacheHomeIgnoresRelativeDirectoryFromEnv)
+TEST(XdgCacheHomeIgnoresRelativeDirectoryFromEnv)
 {
     clear_xdg_env();
     set_home("/tmp");
     ::setenv("XDG_CACHE_HOME", "tmp", 1);
-    BOOST_CHECK_EQUAL("/tmp/.cache", xdg::BaseDirSpecification::create()->cache().home());
-    BOOST_CHECK_EQUAL("/tmp/.cache", xdg::cache().home());
+    CHECK_EQUAL(xdg::BaseDirSpecification::create()->cache().home(),
+                "/tmp/.cache");
+    CHECK_EQUAL(xdg::cache().home(), "/tmp/.cache");
 }
 
-BOOST_AUTO_TEST_CASE(XdgCacheHomeReturnsDefaultValueForEmptyEnv)
+TEST(XdgCacheHomeReturnsDefaultValueForEmptyEnv)
 {
     clear_xdg_env();
     set_home("/tmp");
     ::setenv("XDG_CACHE_HOME", "", 1);
-    BOOST_CHECK_EQUAL("/tmp/.cache", xdg::BaseDirSpecification::create()->cache().home());
-    BOOST_CHECK_EQUAL("/tmp/.cache", xdg::cache().home());
+    CHECK_EQUAL(xdg::BaseDirSpecification::create()->cache().home(),
+                "/tmp/.cache");
+    CHECK_EQUAL(xdg::cache().home(), "/tmp/.cache");
 }
 
-BOOST_AUTO_TEST_CASE(XdgCacheHomeReturnsDefaultValueWhenUnset)
+TEST(XdgCacheHomeReturnsDefaultValueWhenUnset)
 {
     clear_xdg_env();
     set_home("/tmp");
-    BOOST_CHECK_EQUAL("/tmp/.cache", xdg::cache().home());
+    CHECK_EQUAL(xdg::cache().home(), "/tmp/.cache");
 }
 
-BOOST_AUTO_TEST_CASE(XdgCacheHomeUsesAbsoluteEnvValue)
+TEST(XdgCacheHomeUsesAbsoluteEnvValue)
 {
     clear_xdg_env();
     ::setenv("XDG_CACHE_HOME", "/custom/cache", 1);
-    BOOST_CHECK_EQUAL("/custom/cache", xdg::cache().home());
+    CHECK_EQUAL(xdg::cache().home(), "/custom/cache");
 }
 
 // ---------------------------------------------------------------------------
 // XDG_RUNTIME_DIR
 // ---------------------------------------------------------------------------
 
-BOOST_AUTO_TEST_CASE(XdgRuntimeDirThrowsForRelativeDirectoryFromEnv)
+TEST(XdgRuntimeDirThrowsForRelativeDirectoryFromEnv)
 {
     clear_xdg_env();
     ::setenv("XDG_RUNTIME_DIR", "tmp", 1);
-    BOOST_CHECK_THROW(xdg::BaseDirSpecification::create()->runtime().dir(), std::runtime_error);
-    BOOST_CHECK_THROW(xdg::runtime().dir(), std::runtime_error);
+    CHECK_THROW(xdg::BaseDirSpecification::create()->runtime().dir(),
+                std::runtime_error);
+    CHECK_THROW(xdg::runtime().dir(), std::runtime_error);
 }
 
-BOOST_AUTO_TEST_CASE(XdgRuntimeDirThrowsForEmptyEnv)
+TEST(XdgRuntimeDirThrowsForEmptyEnv)
 {
     clear_xdg_env();
     ::setenv("XDG_RUNTIME_DIR", "", 1);
-    BOOST_CHECK_THROW(xdg::BaseDirSpecification::create()->runtime().dir(), std::runtime_error);
-    BOOST_CHECK_THROW(xdg::runtime().dir(), std::runtime_error);
+    CHECK_THROW(xdg::BaseDirSpecification::create()->runtime().dir(),
+                std::runtime_error);
+    CHECK_THROW(xdg::runtime().dir(), std::runtime_error);
 }
 
-BOOST_AUTO_TEST_CASE(XdgRuntimeDirThrowsWhenUnset)
+TEST(XdgRuntimeDirThrowsWhenUnset)
 {
     clear_xdg_env();
-    BOOST_CHECK_THROW(xdg::runtime().dir(), std::runtime_error);
+    CHECK_THROW(xdg::runtime().dir(), std::runtime_error);
 }
 
-BOOST_AUTO_TEST_CASE(XdgRuntimeDirUsesAbsoluteEnvValue)
+TEST(XdgRuntimeDirUsesAbsoluteEnvValue)
 {
     clear_xdg_env();
     ::setenv("XDG_RUNTIME_DIR", "/run/user/1000", 1);
-    BOOST_CHECK_EQUAL("/run/user/1000", xdg::runtime().dir());
-    BOOST_CHECK_EQUAL("/run/user/1000",
-                      xdg::BaseDirSpecification::create()->runtime().dir());
+    CHECK_EQUAL(xdg::runtime().dir(), "/run/user/1000");
+    CHECK_EQUAL(xdg::BaseDirSpecification::create()->runtime().dir(),
+                "/run/user/1000");
+}
+
+// ---------------------------------------------------------------------------
+// main
+// ---------------------------------------------------------------------------
+
+int main()
+{
+    int failed_cases = 0;
+    for (const auto& tc : registry())
+    {
+        const int before = g_failures;
+        try
+        {
+            tc.fn();
+        }
+        catch (const std::exception& e)
+        {
+            ++g_failures;
+            std::cerr << "Test " << tc.name
+                      << " threw uncaught exception: " << e.what() << "\n";
+        }
+        catch (...)
+        {
+            ++g_failures;
+            std::cerr << "Test " << tc.name
+                      << " threw uncaught non-std exception\n";
+        }
+        if (g_failures != before)
+        {
+            ++failed_cases;
+            std::cerr << "FAIL " << tc.name << "\n";
+        }
+    }
+
+    const int total = static_cast<int>(registry().size());
+    if (failed_cases == 0)
+    {
+        std::cout << "All " << total << " test cases passed (" << g_checks
+                  << " checks).\n";
+        return 0;
+    }
+
+    std::cerr << failed_cases << " of " << total << " test cases failed ("
+              << g_failures << " failed checks of " << g_checks << ").\n";
+    return 1;
 }

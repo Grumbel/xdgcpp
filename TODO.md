@@ -13,7 +13,7 @@ Spec: https://specifications.freedesktop.org/basedir-spec/latest/
 
 ### Test / CI (done)
 
-- Boost.Test suite covers unset/empty/relative/absolute for every variable.
+- Self-contained unit-test suite covers unset/empty/relative/absolute for every variable.
 - CMake registers the suite with CTest.
 - Flake exposes `checks.xdgcpp` and runs tests via `doCheck`.
 

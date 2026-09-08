@@ -22,14 +22,11 @@
             "-DXDG_BUILD_INFO=ON"
           ];
 
-          # Build + run the Boost unit-test suite via ctest.
+          # Build + run the unit-test suite via ctest.
           doCheck = true;
 
           nativeBuildInputs = with pkgs; [
             cmake
-            # boost is required at configure/build time because the test
-            # binary is compiled when XDG_BUILD_TESTS=ON (before check).
-            boost
           ];
 
           meta = with pkgs.lib; {
