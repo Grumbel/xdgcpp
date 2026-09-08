@@ -52,12 +52,14 @@
         };
 
         apps = rec {
-          default = xdgcpp-info;
-
-          xdgcpp-info = flake-utils.lib.mkApp {
-            drv = packages.xdgcpp;
-            exePath = "/bin/xdgcpp-info";
+          xdgcpp-info = {
+            type = "app";
+            program = "${packages.xdgcpp}/bin/xdgcpp-info";
+            meta = {
+              description = "Print resolved XDG base directories";
+            };
           };
+          default = xdgcpp-info;
         };
       }
     );
