@@ -3,7 +3,7 @@ project(xdgcpp VERSION 0.1.0)
 
 include(GNUInstallDirs)
 
-set(XDG_BUILD_TESTS OFF CACHE BOOL "Toggles building of the xdg test suite")
+option(XDG_BUILD_TESTS "Build and register the xdgcpp unit-test suite" OFF)
 
 set(XDGCPP_VERSION ${PROJECT_VERSION})
 
@@ -34,7 +34,12 @@ if(XDG_BUILD_TESTS)
     Boost::unit_test_framework
     )
 
-  add_test(xdgcpp_test xdgcpp_test)
+  # Register with CTest so `ctest` / the Nix check phase runs the suite.
+  add_test(NAME xdgcpp_test COMMAND xdgcpp_test)
+  set_tests_properties(xdgcpp_test PROPERTIES
+    # Fail the build on any assertion failure.
+    TIMEOUT 30
+  )
 endif()
 
 install(TARGETS xdgcpp xdgcpp-info
