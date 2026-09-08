@@ -131,4 +131,4 @@ const Cache& cache();
 const Runtime& runtime();
 }
 
-#endif // XDG_H_
+#endif // HEADER_XDGCPP_XDG_H
